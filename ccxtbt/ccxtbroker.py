@@ -178,7 +178,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
             return None
 
     def notify(self, order):
-        self.notifs.put(order)
+        self.notifs.put(order.clone())
 
     def getposition(self, data, clone=True):
         # return self.o.getposition(data._dataname, clone=clone)
@@ -186,6 +186,34 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         if clone:
             pos = pos.clone()
         return pos
+
+    def execute_order(self, o_order, ccxt_order):
+        # Execute the order
+        if ccxt_order['id'] in o_order.executed_fills:
+            return
+        fees = []
+        for fee in ccxt_order['fees']:
+            if fee['cost'] is not None:
+                fees.append(fee)
+        if not fees:
+                fee = self.store.exchange.calculate_fee(ccxt_order['symbol'], ccxt_order['type'],
+                                                     ccxt_order['side'], ccxt_order['amount'], ccxt_order['price'])
+                fees.append(fee)
+        base,quote = ccxt_order['symbol'].split('/')
+        fee_cost = 0
+        for fee in fees:
+            if fee['currency'] == quote:
+                fee_cost += fee['cost']
+            elif fee['currency'] == base:
+                fee_cost += fee['cost'] * ccxt_order['price']
+
+        filled = ccxt_order['filled'] if o_order.isbuy() else -ccxt_order['filled']
+        o_order.execute(ccxt_order['datetime'], ccxt_order['amount'], ccxt_order['price'],
+                        filled, ccxt_order['cost'], fee_cost,
+                        0, 0.0, 0.0,
+                        0.0, 0.0,
+                        0, 0.0)
+        o_order.executed_fills.append(ccxt_order['id'])
 
     def next(self):
         if self.debug:
@@ -205,13 +233,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
             # Check for new fills
             if 'trades' in ccxt_order and ccxt_order['trades'] is not None:
                 for fill in ccxt_order['trades']:
-                    if fill not in o_order.executed_fills:
-                        o_order.execute(fill['datetime'], fill['amount'], fill['price'],
-                                        0, 0.0, 0.0,
-                                        0, 0.0, 0.0,
-                                        0.0, 0.0,
-                                        0, 0.0)
-                        o_order.executed_fills.append(fill['id'])
+                    self.execute_order(o_order, fill)
 
             if self.debug:
                 print(json.dumps(ccxt_order, indent=self.indent))
@@ -221,6 +243,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
                 pos = self.getposition(o_order.data, clone=False)
                 pos.update(o_order.size, o_order.price)
                 o_order.completed()
+                self.execute_order(o_order, ccxt_order)
                 self.notify(o_order)
                 self.open_orders.remove(o_order)
                 self.get_balance()
@@ -230,6 +253,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
             if ccxt_order[self.mappings['canceled_order']['key']] == self.mappings['canceled_order']['value']:
                 self.open_orders.remove(o_order)
                 o_order.cancel()
+                self.execute_order(o_order, ccxt_order)
                 self.notify(o_order)
 
     def _submit(self, owner, data, exectype, side, amount, price, params):
@@ -257,6 +281,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         _order = self.store.fetch_order(ret_ord['id'], data.p.dataname)
 
         order = CCXTOrder(owner, data, _order)
+        order.addcomminfo(self.getcommissioninfo(data))
         order.price = ret_ord['price']
         self.open_orders.append(order)
 
