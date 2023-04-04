@@ -141,6 +141,15 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
 
         self.use_order_params = True
 
+    def load_positions(self):
+        '''Load the positions from the store'''
+        bals = self.store.get_wallet_balance("", {})
+        for coin, bal in bals.items():
+            if type(bal)==dict and 'total' in bal and bal['total'] > 0:
+                symbol = coin + '/' + self.currency
+                pos = self.positions[symbol]
+                pos.size = bal['total']
+
     def get_balance(self):
         self.store.get_balance()
         self.cash = self.store._cash
