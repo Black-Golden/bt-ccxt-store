@@ -105,7 +105,7 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
 
         while True:
             if self._state == self._ST_LIVE:
-                if self._timeframe == bt.TimeFrame.Ticks:
+                if self._timeframe <= bt.TimeFrame.Seconds:
                     return self._load_ticks()
                 else:
                     self._fetch_ohlcv()

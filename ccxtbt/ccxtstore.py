@@ -59,6 +59,9 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
 
     # Supported granularities
     _GRANULARITIES = {
+        (bt.TimeFrame.Seconds, 1): '1s',
+        (bt.TimeFrame.Seconds, 10): '10s',
+        (bt.TimeFrame.Seconds, 30): '30s',
         (bt.TimeFrame.Minutes, 1): '1m',
         (bt.TimeFrame.Minutes, 3): '3m',
         (bt.TimeFrame.Minutes, 5): '5m',
@@ -108,7 +111,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
                 self._cash = 0
             else:
                 self._cash = balance['free'][currency]
-        except KeyError:  # never funded or eg. all USD exchanged 
+        except KeyError:  # never funded or eg. all USD exchanged
             self._cash = 0
         try:
             if balance == 0 or not balance['total'][currency]:
