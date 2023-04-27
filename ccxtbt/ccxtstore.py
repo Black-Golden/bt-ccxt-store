@@ -100,6 +100,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
 
     def __init__(self, exchange, currency, config, retries, debug=False, sandbox=False):
         self.exchange = getattr(ccxt, exchange)(config)
+        self.public = getattr(ccxt, exchange)({k:v for k,v in config.items() if k not in ['secret', 'apiKey']})
         if sandbox:
             self.exchange.set_sandbox_mode(True)
         self.currency = currency
@@ -191,7 +192,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
     def fetch_ohlcv(self, symbol, timeframe, since, limit, params={}):
         if self.debug:
             print('Fetching: {}, TF: {}, Since: {}, Limit: {}'.format(symbol, timeframe, since, limit))
-        return self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit, params=params)
+        return self.public.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit, params=params)
 
     @retry
     def fetch_order(self, oid, symbol):

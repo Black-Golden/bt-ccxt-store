@@ -71,10 +71,12 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
         ('fetch_ohlcv_params', {}),
         ('ohlcv_limit', 20),
         ('drop_newest', False),
+        ('fetch_interval', 10),
         ('debug', False)
     )
 
     _store = CCXTStore
+
 
     # States for the Finite State Machine in _load
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -86,6 +88,7 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
         self._data = deque()  # data queue for price data
         self._last_id = ''  # last processed trade id for ohlcv
         self._last_ts = 0  # last processed timestamp for ohlcv
+        self._last_fetch_ts = 0
 
     def start(self, ):
         DataBase.start(self)
@@ -101,6 +104,8 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
 
     def _load(self):
         if self._state == self._ST_OVER:
+            return False
+        if time.time() - self._last_fetch_ts < self.p.fetch_interval:
             return False
 
         while True:
@@ -155,6 +160,8 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
                     datetime.utcnow(), since, since_dt, granularity, limit, self.p.fetch_ohlcv_params))
                 data = sorted(self.store.fetch_ohlcv(self.p.dataname, timeframe=granularity,
                                                      since=since, limit=limit, params=self.p.fetch_ohlcv_params))
+
+                self._last_fetch_ts = time.time()
                 try:
                     for i, ohlcv in enumerate(data):
                         tstamp, open_, high, low, close, volume = ohlcv
