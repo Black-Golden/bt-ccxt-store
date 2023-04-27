@@ -105,8 +105,8 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
     def _load(self):
         if self._state == self._ST_OVER:
             return False
-        if time.time() - self._last_fetch_ts < self.p.fetch_interval:
-            return False
+        if self._state == self._ST_LIVE and (time.time() - self._last_fetch_ts < self.p.fetch_interval):
+            return None
 
         while True:
             if self._state == self._ST_LIVE:
@@ -160,8 +160,6 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
                     datetime.utcnow(), since, since_dt, granularity, limit, self.p.fetch_ohlcv_params))
                 data = sorted(self.store.fetch_ohlcv(self.p.dataname, timeframe=granularity,
                                                      since=since, limit=limit, params=self.p.fetch_ohlcv_params))
-
-                self._last_fetch_ts = time.time()
                 try:
                     for i, ohlcv in enumerate(data):
                         tstamp, open_, high, low, close, volume = ohlcv
@@ -179,6 +177,8 @@ class CCXTFeed(with_metaclass(MetaCCXTFeed, DataBase)):
 
             # Check to see if dropping the latest candle will help with
             # exchanges which return partial data
+
+            self._last_fetch_ts = time.time()
             if self.p.drop_newest:
                 del data[-1]
 
