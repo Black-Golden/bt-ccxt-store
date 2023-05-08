@@ -27,6 +27,7 @@ import json
 from backtrader import BrokerBase, OrderBase, Order
 from backtrader.position import Position
 from backtrader.utils.py3 import queue, with_metaclass
+import uuid
 
 from .ccxtstore import CCXTStore
 
@@ -265,14 +266,17 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
                 self.execute_order(o_order, ccxt_order)
                 self.notify(o_order)
 
-    def _submit(self, owner, data, exectype, side, amount, price, params):
+    def _submit(self, owner, data, exectype, side, amount, price, tradeid, params):
         if amount == 0 or price == 0:
         # do not allow failing orders
             return None
+        sid = (tradeid or "_").split('_')[0]
         order_type = self.order_types.get(exectype) if exectype else 'market'
+        cid = f"{sid}_{str(uuid.uuid4()).split('-')[0]}"
         created = int(data.datetime.datetime(0).timestamp()*1000)
         # Extract CCXT specific params if passed to the order
         params = params['params'] if 'params' in params else params
+        params['clientOrderId'] = cid
         if not self.use_order_params:
             ret_ord = self.store.create_order(symbol=data.p.dataname, order_type=order_type, side=side,
                                               amount=amount, price=price, params={})
@@ -290,6 +294,10 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         _order = self.store.fetch_order(ret_ord['id'], data.p.dataname)
 
         order = CCXTOrder(owner, data, _order)
+        order.tradeid = tradeid
+        order.sid = sid
+        order.cid = cid
+        order.id = _order.get('id', -1)
         order.addcomminfo(self.getcommissioninfo(data))
         order.price = ret_ord['price']
         self.open_orders.append(order)
@@ -303,7 +311,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
             **kwargs):
         del kwargs['parent']
         del kwargs['transmit']
-        return self._submit(owner, data, exectype, 'buy', size, price, kwargs)
+        return self._submit(owner, data, exectype, 'buy', size, price, tradeid, kwargs)
 
     def sell(self, owner, data, size, price=None, plimit=None,
              exectype=None, valid=None, tradeid=0, oco=None,
@@ -311,7 +319,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
              **kwargs):
         del kwargs['parent']
         del kwargs['transmit']
-        return self._submit(owner, data, exectype, 'sell', size, price, kwargs)
+        return self._submit(owner, data, exectype, 'sell', size, price, tradeid, kwargs)
 
     def cancel(self, order):
 
